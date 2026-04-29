@@ -5,32 +5,34 @@ import logging
 from benchmarking import benchmark
 from logger import configure_logging
 
+print("Testing")
 
 def main():
     """The main function"""
-    valor = 10.1
+    value = 10.1
     # debug: mensaje para conocer los internals del modelo
-    log.debug(f"valor = {valor}")
+    log.debug(f"debug message -> value={value}.")
 
-    # nfo: mensaje informativo
-    log.info(f"valor = {valor}")
+    # info: mensaje informativo
+    log.info(f"info message -> value={value}.")
 
-    # warning: Mensaje d eun error, pero que puede ser superado
-    log.warning(f"Warning: valor fuera de escala = {valor}")
+    # warning: mensaje de un error, pero que puede ser superado
+    log.warning(f"warning message -> value={value}.")
 
-    # error: ocurrio un error que no permite continuar
-    log.error(f"Error: valor no valido = {valor}")
+    # error: ocurrio un error en el codigo
+    log.error(f"error message -> value={value}.")
 
-    # fatal: ocurrio un error que no mermite continuar
-    log.fatal(f"Fatal: no se puede continuar con el computo!")
+    # fatal: ocurrio un error que no permite continuar
+    log.fatal(f"fatal message -> value={value}.")
     pass
 
 
 # Call the main function
-if __name__ == "__main__":
+if __name__ == '__main__':
     # configure the logging
     configure_logging(logging.DEBUG)
-    log = logging.getLogger(__name__)
     # get the main logger
+    log = logging.getLogger(__name__)
+    # measure time
     with benchmark("main", log):
         main()
