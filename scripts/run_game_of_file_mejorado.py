@@ -2,7 +2,7 @@
 import logging
 from typing import TypeAlias
 
-from prettytable import PrettyTable, HRuleStyle
+from prettytable import PrettyTable
 from tqdm import tqdm
 
 from benchmarking import benchmark  # ty:ignore[unresolved-import]
@@ -16,16 +16,20 @@ def show_board(board: Board) -> None:
     """Show the board in the screen in a human readable format."""
     table = PrettyTable()
 
-    # number of colunmns
+    # Número de columnas actuales
     ncols = len(board[0]) if board else 0
 
-    # header
+    # Header: r\c seguido de los números de columna (0, 1, 2...)
     table.field_names = ["r\\c"] + [str(c) for c in range(ncols)]
-    table.hrules = HRuleStyle.ALL
 
-    # populate the table
+    # Activa las reglas horizontales usando el valor booleano
+    table.hrules = True
+
+    # Agrega cada fila incluyendo el índice de fila al principio
     for r, row in enumerate(board):
+        # El primer elemento de la fila es el índice 'r'
         table.add_row([str(r)] + ["█" if cell == 1 else "·" for cell in row])
+
     log.debug(f"\n{table}")
 
 
@@ -171,13 +175,12 @@ def main() -> None:
 
 
 # call the main function
-if __name__ == '__main__':
-    # configure the logging
+if __name__ == "__main__":
     configure_logging(logging.DEBUG)
-    # get the main logger
     log = logging.getLogger(__name__)
-    # measure time
+
+    # Cambia 'null' por 'None' o simplemente elimina el primer argumento si la función lo permite
     with benchmark("main", log):
-        log.info("️🏎️ starting ..")
+        log.info("🏎️ starting ..")
         main()
-        log.info("️🏁 done.")
+        log.info("🏁 done.")
