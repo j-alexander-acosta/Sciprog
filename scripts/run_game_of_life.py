@@ -31,7 +31,6 @@ def show_board(board: Board) -> None:
         table.add_row([str(r)] + ["█" if cell == 1 else "·" for cell in row])
     log.debug(f"\n{table}")
 
-
 def count_neighbours(board: Board, row: int, column: int) -> int:
     """Count the number of neighbouring cells in the board."""
     total = 0
