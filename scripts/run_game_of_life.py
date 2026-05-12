@@ -1,196 +1,291 @@
 #  Copyright (c) 2026. Programacion Cientifica, DISC, Antofagasta, Chile.
 import logging
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TypeAlias
+from typing import ClassVar
 
 import imageio
 import numpy as np
-from prettytable import PrettyTable, HRuleStyle
+from numba import njit
+from prettytable import PrettyTable
+from scipy.ndimage import convolve
 from tqdm import tqdm
 
 from benchmarking import benchmark  # ty:ignore[unresolved-import]
 from logger import configure_logging  # ty:ignore[unresolved-import]
 
-# The board.
-Board: TypeAlias = list[list[int]]
 
+@njit(cache=True)
+def evolve_numba(state: np.ndarray) -> np.ndarray:
+    # Get the dimensions of the board
+    rows, cols = state.shape
 
-def show_board(board: Board) -> None:
-    """Show the board in the screen in a human readable format."""
-    table = PrettyTable()
+    # Create a new board initialized with zeros (all dead cells)
+    # This will hold the next generation state
+    new_state = np.zeros_like(state)
 
-    # number of colunmns
-    ncols = len(board[0]) if board else 0
+    # Iterate through every cell on the board
+    for r in range(rows):
+        for c in range(cols):
+            # Initialize neighbor counter for the current cell
+            count = 0
 
-    # header
-    table.field_names = ["r\\c"] + [str(c) for c in range(ncols)]
-    table.hrules = HRuleStyle.ALL
+            # Check all 8 neighboring cells (3x3 grid centered on current cell)
+            for dr in (-1, 0, 1):  # row offset: -1 (above), 0 (same), 1 (below)
+                for dc in (-1, 0, 1):  # col offset: -1 (left), 0 (same), 1 (right)
+                    # Skip the center cell itself (don't count it as a neighbor)
+                    if dr == 0 and dc == 0:
+                        continue
 
-    # populate the table
-    for r, row in enumerate(board):
-        table.add_row([str(r)] + ["█" if cell == 1 else "·" for cell in row])
-    log.debug(f"\n{table}")
+                    # Calculate neighbor's coordinates
+                    nr, nc = r + dr, c + dc
 
-def count_neighbours(board: Board, row: int, column: int) -> int:
-    """Count the number of neighbouring cells in the board."""
-    total = 0
+                    # Only count neighbors that are within board boundaries
+                    # This implements edge wrapping prevention (dead cells outside border)
+                    if 0 <= nr < rows and 0 <= nc < cols:
+                        # Add the neighbor's state (1 if alive, 0 if dead) to the count
+                        count += state[nr, nc]
 
-    # iterate over the 3x3 square around the cell
-    for r in (range(row - 1, row + 2)):
-        for c in (range(column - 1, column + 2)):
-
-            # the center cell can't be counted
-            if r == row and c == column:
-                continue
-
-            # outside the board by row
-            if r < 0 or r >= len(board):
-                continue
-
-            # outside the board by col
-            if c < 0 or c >= len(board[r]):
-                continue
-
-            # count only the living cellsl
-            if board[r][c] == 1:
-                total += 1
-
-    return total
-
-
-def expand(board: Board) -> Board:
-    """Expand the board so that all cells are neighbours."""
-    n_rows = len(board)
-    n_cols = len(board[0])
-
-    # the board expanded
-    expanded_board = []
-    for r in range(n_rows + 2):
-        # create the new row
-        new_row = []
-        for c in range(n_cols + 2):
-            # append each cell into the row
-            new_row.append(0)
-        # append to the new board the new row
-        expanded_board.append(new_row)
-
-    # copy the center board
-    for r in range(n_rows):
-        for c in range(n_cols):
-            expanded_board[r + 1][c + 1] = board[r][c]
-
-    return expanded_board
-
-
-def compact(board: Board) -> Board:
-    """Compact the board."""
-
-    # 1. remove the first row if all the values are zero
-    if all(c == 0 for c in board[0]):
-        # splice the first row
-        board = board[1:]
-
-    # 2. remove the last row if all the values are zero
-    if all(c == 0 for c in board[-1]):
-        # splice the last row
-        board = board[0:-1]
-
-    # 3. remove the first col if all the values are zero
-    if all(row[0] == 0 for row in board):
-        for row in board:
-            row.pop(0)
-
-    # 4. remove the last col if all the values are zero
-    if all(row[-1] == 0 for row in board):
-        for row in board:
-            row.pop(-1)
-
-    return board
-
-
-def evolve(board: Board) -> Board:
-    """Evolve the board."""
-
-    # expand the board
-    board = expand(board)
-
-    # create a new board of the same size of board with all values in cero
-    next_board = [[0] * len(row) for row in board]
-
-    # iterate over the whole board
-    for row in range(len(board)):
-        for column in range(len(board[row])):
-
-            # count the neighbours
-            neighbours = count_neighbours(board, row, column)
-            # log.debug(f"neighbours: {row},{column} -> {neighbours}")
-
-            # it's alive!
-            if board[row][column] == 1:
-                # 1. survival
-                if neighbours == 2 or neighbours == 3:
-                    next_board[row][column] = 1
-                    continue
-                # 2. death by isolation
-                if neighbours < 2:
-                    next_board[row][column] = 0
-                    continue
-                # 3. death by overcrowding
-                if neighbours > 3:
-                    next_board[row][column] = 0
+            # Apply Conway's Game of Life rules based on current cell state and neighbor count
+            if state[r, c] == 1:
+                # Current cell is ALIVE
+                # Survival rule: stay alive only if it has 2 or 3 neighbors
+                if count == 2 or count == 3:
+                    new_state[r, c] = 1
+                # Otherwise, the cell dies (new_state stays 0 from initialization)
             else:
-                # it's dead!
-                if neighbours == 3:
-                    next_board[row][column] = 1
+                # Current cell is DEAD
+                # Birth rule: a dead cell becomes alive only if it has exactly 3 neighbors
+                if count == 3:
+                    new_state[r, c] = 1
+                # Otherwise, the cell stays dead (new_state stays 0)
 
-    # remove the borders with all values in zero
-    next_board = compact(next_board)
-
-    return next_board
-
-
-def save_board(board: Board, filename: Path, cell_size: int = 2) -> None:
-    """Save the board into a image."""
-
-    # list[list[int]] to numpy of uint8 (0 -> 255)
-    arr = np.array(board, dtype=np.uint8)
-
-    # scale up: kronecker product 1 become cell_size x cell_size of 1s.
-    arr = np.kron(arr, np.ones((cell_size, cell_size), dtype=np.uint8))
-
-    # invert the values: 1=black, 0=white
-    image = np.where(arr == 1, 0, 255).astype(np.uint8)
-
-    # save image
-    imageio.imwrite(filename, image)
+    # Return the newly computed generation
+    return new_state
 
 
-def main() -> None:
-    """The main function."""
+@dataclass
+class GameOfLife:
+    """The Game of Life class"""
 
+    # the board
+    board: np.ndarray
+
+    # the current generation
+    generation: int = 0
+
+    # the max number of generations
+    max_generations: int = 10000
+
+    # the representation of a dead cell
+    dead_cell: str = "·"
+
+    # the representation of a live cell
+    alive_cell: str = "█"
+
+    # constants
+    ALIVE: ClassVar[int] = 1
+    DEAD: ClassVar[int] = 0
+
+    # kernel to count the neighbors
+    KERNEL = np.array(
+        [
+            [1, 1, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+        ]
+    )
+
+    def __post_init__(self) -> None:
+        """Post-initialization check for the Game of Life class"""
+
+        # The board needs to be a ndarray
+        if not isinstance(self.board, np.ndarray):
+            raise TypeError("The board must be a numpy array")
+
+        # The board needs to be a unit8
+        if self.board.dtype != np.uint8:
+            self.board = self.board.astype(np.uint8)
+
+        # The board needs to be a 2 dimensional array
+        if self.board.ndim != 2:
+            raise TypeError("The board must be a 2-dimensional array")
+
+        # All the cell in the board needs to be ALIVE/DEAD
+        if not np.all(np.isin(self.board, [self.DEAD, self.ALIVE])):
+            raise TypeError("The board must contain only zeros or ones")
+
+        # The max generations needs to be positive
+        if self.max_generations <= 0:
+            raise TypeError("The max_generations must be a positive integer")
+
+    @classmethod
+    def from_list(cls, initial_state: list[list[int]]) -> "GameOfLife":
+        """Create a GameOfLife class from a list of states"""
+
+        if not initial_state:
+            raise TypeError("The initial_state must be a list")
+
+        if not all(isinstance(state, list) for state in initial_state):
+            raise ValueError("The initial_state must be a list")
+
+        return cls(board=np.array(initial_state))
+
+    def __str__(self) -> str:
+        """Show the board in ascii using PrettyTable."""
+        table = PrettyTable()
+        table.field_names = [f"Gen={self.generation} -> pop={self.population()}"]
+
+        for r, row in enumerate(self.board):
+            str_row = " ".join(
+                self.alive_cell if cell == self.ALIVE else self.dead_cell for cell in row
+            )
+            table.add_row([str_row])
+        return str(table)
+
+    def population(self) -> int:
+        """Return the population of the board."""
+        return np.sum(self.board)
+
+    def expand_board(self) -> None:
+        """Expand the board with a border of dead cells."""
+        self.board = np.pad(self.board, pad_width=1, mode='constant', constant_values=self.DEAD)
+
+    def compact(self) -> None:
+        """Compact the board."""
+        rows = np.where(np.any(self.board, axis=1))[0]
+        cols = np.where(np.any(self.board, axis=0))[0]
+        if rows.size == 0 or cols.size == 0:
+            return
+        self.board = self.board[rows[0]:rows[-1] + 1, cols[0]:cols[-1] + 1]
+
+    def save_image(self, filename: Path, cell_size: int = 2) -> None:
+        """Save the board into a image."""
+
+        # scale up: kronecker product 1 become cell_size x cell_size of 1s.
+        arr = np.kron(self.board, np.ones((cell_size, cell_size), dtype=np.uint8))
+
+        # invert the values: 1=black, 0=white
+        image = np.where(arr == 1, 0, 255).astype(np.uint8)
+
+        # save image
+        imageio.imwrite(filename, image)
+
+    def evolve_optimized(self) -> None:
+        # 1) Expand the current board with a 1-cell dead border.
+        self.expand_board()
+
+        # 2) Call the numba optimized evolution (machine code compiled)
+        self.board = evolve_numba(self.board)
+
+        # DEBUG: try to understand why the evolve_numba cant' parallelized
+        # evolve_numba.parallel_diagnostics(level=4)
+
+        # 3) Remove fully dead outer rows/columns to keep the board compact.
+        self.compact()
+
+        # 4) Increase generation counter after the full transition is complete.
+        self.generation += 1
+
+    def evolve(self) -> None:
+        """Advance the board by one generation using Conway's Game of Life rules."""
+
+        # 1) Expand the current board with a 1-cell dead border.
+        # - New live cells can appear at the edges.
+        # - Without padding, births outside the current bounds would be lost.
+        self.expand_board()
+
+        # 2) Count live neighbors for every cell using a convolution kernel.
+        # The kernel has 1s around the center and 0 at the center:
+        #   [1, 1, 1]
+        #   [1, 0, 1]
+        #   [1, 1, 1]
+        # This sums the 8 surrounding cells while ignoring the cell itself.
+        # mode="constant", cval=0 means cells beyond the board are treated as DEAD.
+        neighbors = convolve(
+            self.board,
+            self.KERNEL,
+            mode="constant",
+            cval=self.DEAD,
+        )
+
+        # 3) Build a boolean mask of cells that are currently alive.
+        # True  -> currently ALIVE
+        # False -> currently DEAD
+        alive = self.board == self.ALIVE
+
+        # 4) Apply Conway's rules in vectorized form:
+        #
+        #   Survival: an ALIVE cell stays alive if it has 2 or 3 neighbors.
+        #   Birth:    a DEAD  cell becomes alive if it has exactly 3 neighbors.
+        #   Death:    all other cases become/stay dead.
+        #
+        # We compute each rule as a boolean mask, then combine them.
+        survive_mask = alive & ((neighbors == 2) | (neighbors == 3))
+        birth_mask = ~alive & (neighbors == 3)  # NOTE: use 3, not 2
+
+        # 5) Create the next generation:
+        # - Cells matching survive_mask OR birth_mask become ALIVE (1).
+        # - Everything else becomes DEAD (0).
+        # Cast back to uint8 to keep board storage compact and consistent.
+        self.board = np.where(
+            survive_mask | birth_mask,
+            self.ALIVE,
+            self.DEAD,
+        ).astype(np.uint8)
+
+        # 6) Remove fully dead outer rows/columns to keep the board compact.
+        # This avoids unbounded growth of empty borders over time.
+        self.compact()
+
+        # 7) Increase generation counter after the full transition is complete.
+        self.generation += 1
+
+
+def main():
     # the max number of iterations
     max_iterations = 500
 
     # init -> board 3x3
+    # Glider gun
     board = [
-        [1, 1, 0],
-        [0, 1, 1],
-        [0, 1, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+        [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     ]
 
-    # show the initial state
-    show_board(board)
+    # Glider:
+    #         [0, 1, 0],
+    #         [0, 0, 1],
+    #         [1, 1, 1],
+
+    # Original:
+    #         [1, 1, 0],
+    #         [0, 1, 1],
+    #         [0, 1, 0],
+
+    # list[list[int]] -> GameOfLife
+    gof = GameOfLife.from_list(board)
+    log.debug(f"initial:\n{gof}")
 
     # iterate over the board and evolve it
-    for i in tqdm(range(max_iterations), ncols=180, desc="Gaming"):
-        # log.debug(f"-- iteration: {i + 1} {'-' * 60}")
-        board = evolve(board)
+    for i in tqdm(range(max_iterations), ncols=250, desc="Gaming"):
+        # gof.evolve()
+        gof.evolve_optimized()
 
-        # save the board into a image
-        save_board(board, output_dir / f"board-{i:05d}.png", cell_size=10)
+        # gof.save_image(output_dir / f"board-{i:05d}.png", cell_size=1)
+        # log.debug(f"board:\n{gof}")
 
-    # show the last state
-    show_board(board)
+    log.debug(f"board:\n{gof}")
+
+    # save the last iteration into a png
+    gof.save_image(output_dir / f"board-{max_iterations:05d}.png", cell_size=1)
 
 
 # call the main function

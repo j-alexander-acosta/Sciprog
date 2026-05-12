@@ -1,6 +1,7 @@
 #  Copyright (c) 2026. Programacion Cientifica, DISC, Antofagasta, Chile.
 import logging
 from dataclasses import dataclass
+from numba import njit
 from pathlib import Path
 from typing import ClassVar
 
@@ -12,6 +13,55 @@ from tqdm import tqdm
 from benchmarking import benchmark  # ty:ignore[unresolved-import]
 from logger import configure_logging  # ty:ignore[unresolved-import]
 
+njit = None
+# pyrefly: ignore [not-callable]
+@njit(cache=True)
+def evolve_numba(state: np.ndarray) -> np.ndarray:
+    # Get the dimensions of the board
+    rows, cols = state.shape
+
+    # Create a new board initialized with zeros (all dead cells)
+    # This will hold the next generation state
+    new_state = np.zeros_like(state)
+
+    # Iterate through every cell on the board
+    for r in range(rows):
+        for c in range(cols):
+            # Initialize neighbor counter for the current cell
+            count = 0
+
+            # Check all 8 neighboring cells (3x3 grid centered on current cell)
+            for dr in (-1, 0, 1):  # row offset: -1 (above), 0 (same), 1 (below)
+                for dc in (-1, 0, 1):  # col offset: -1 (left), 0 (same), 1 (right)
+                    # Skip the center cell itself (don't count it as a neighbor)
+                    if dr == 0 and dc == 0:
+                        continue
+
+                    # Calculate neighbor's coordinates
+                    nr, nc = r + dr, c + dc
+
+                    # Only count neighbors that are within board boundaries
+                    # This implements edge wrapping prevention (dead cells outside border)
+                    if 0 <= nr < rows and 0 <= nc < cols:
+                        # Add the neighbor's state (1 if alive, 0 if dead) to the count
+                        count += state[nr, nc]
+
+            # Apply Conway's Game of Life rules based on current cell state and neighbor count
+            if state[r, c] == 1:
+                # Current cell is ALIVE
+                # Survival rule: stay alive only if it has 2 or 3 neighbors
+                if count == 2 or count == 3:
+                    new_state[r, c] = 1
+                # Otherwise, the cell dies (new_state stays 0 from initialization)
+            else:
+                # Current cell is DEAD
+                # Birth rule: a dead cell becomes alive only if it has exactly 3 neighbors
+                if count == 3:
+                    new_state[r, c] = 1
+                # Otherwise, the cell stays dead (new_state stays 0)
+
+    # Return the newly computed generation
+    return new_state
 
 @dataclass
 class GameOfLife:
@@ -107,6 +157,11 @@ class GameOfLife:
         if rows.size == 0 or cols.size == 0:
             return
         self.board = self.board[rows[0]:rows[-1] + 1, cols[0]:cols[-1] + 1]
+
+    def evol_optimized(self) -> None:
+    # 1. Expand the current board with a 1-cell dead border
+    self.expand_board()
+
 
     def evolve(self) -> None:
         """Evolve the board."""
