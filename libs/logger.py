@@ -3,10 +3,8 @@
 import logging
 
 import coloredlogs
-from typeguard import typechecked
 
 
-@typechecked
 def configure_logging(level: int = logging.DEBUG) -> None:
     """Configure the logging module."""
     coloredlogs.install(
@@ -35,3 +33,5 @@ def configure_logging(level: int = logging.DEBUG) -> None:
     # decrease the level of logger in external libraries
     logging.getLogger("PIL").setLevel(logging.WARNING)
     logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
+    logging.getLogger("matplotlib.pyplot").setLevel(logging.WARNING)
+    logging.getLogger("matplotlib.colorbar").setLevel(logging.WARNING)
