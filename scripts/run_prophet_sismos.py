@@ -27,7 +27,7 @@ def main() -> None:
     # read the data
     # df = pd.read_csv(root_dir / 'data' / 'sismos.csv', parse_dates=['ds'])
     # 1. Cargar el CSV (añadimos sep=None y engine='python' por si Excel usó punto y coma)
-    df = pd.read_csv(root_dir / "data" / "Sismos.csv", sep=None, engine="python")
+    df = pd.read_csv(root_dir / "data" / "Sismos_2.csv", sep=None, engine="python")
 
     # 2. LIMPIEZA CRÍTICA: Elimina espacios en blanco invisibles al inicio y al final de los títulos
     df.columns = df.columns.str.strip()
@@ -35,8 +35,8 @@ def main() -> None:
     # 3. Ahora que las columnas están limpias, convertimos 'ds' a formato fecha de forma segura
     # df["ds"] = pd.to_datetime(df["ds"])
 
-    # Forzamos el formato Día-Mes-Año y añadimos dayfirst=True
-    df["ds"] = pd.to_datetime(df["ds"], format="%d-%m-%Y", dayfirst=True)
+    # Alternativa ultra-flexible si el formato varía entre filas
+    df["ds"] = pd.to_datetime(df["ds"], format="mixed", dayfirst=True)
     
     log.debug(f"head:\n{df.head()}")
     log.debug(f"data range: {df['ds'].min()} to {df['ds'].max()}")
@@ -68,9 +68,9 @@ def main() -> None:
 
     # --- 1. Forecast plot with changepoints ---
     fig1 = model.plot(forecast)
-    _title(fig1.gca(), 'Proyecci\u00f3n IPC mensual — 6 meses')
+    _title(fig1.gca(), 'Proyecci\u00f3n Sismos — 6 meses')
     fig1.gca().set_xlabel('Fecha')
-    fig1.gca().set_ylabel('Variaci\u00f3n mensual IPC (%)')
+    fig1.gca().set_ylabel('Magnitud')
     add_changepoints_to_plot(fig1.gca(), model, forecast)
     fig1.tight_layout()
     plt.show()
