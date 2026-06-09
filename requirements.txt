@@ -1,5 +1,6 @@
 black==26.3.1
 coloredlogs==15.0.1
+fg-data-profiling==4.19.1
 humanize==4.15.0
 imageio==2.37.3
 matplotlib==3.10.9
