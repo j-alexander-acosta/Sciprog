@@ -27,7 +27,7 @@ def main() -> None:
     # read the data
     # df = pd.read_csv(root_dir / 'data' / 'sismos.csv', parse_dates=['ds'])
     # 1. Cargar el CSV (añadimos sep=None y engine='python' por si Excel usó punto y coma)
-    df = pd.read_csv(root_dir / "data" / "Sismos_2.csv", sep=None, engine="python")
+    df = pd.read_csv(root_dir / "data" / "sismos_actuales.csv", sep=None, engine="python")
 
     # 2. LIMPIEZA CRÍTICA: Elimina espacios en blanco invisibles al inicio y al final de los títulos
     df.columns = df.columns.str.strip()
