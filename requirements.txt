@@ -3,11 +3,13 @@ coloredlogs==15.0.1
 fg-data-profiling==4.19.1
 humanize==4.15.0
 imageio==2.37.3
+ipywidgets==8.1.8
+jupyterlab==4.6.0
 matplotlib==3.10.9
 mypy==2.0.0
 mpld3==0.5.12
 numba==0.65.1
-pandas==3.0.3
+pandas==3.7.5
 prettytable==3.17.0
 pymupdf4llm==1.27.2.3
 prophet==1.3.0
