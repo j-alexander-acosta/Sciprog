@@ -7,3 +7,11 @@
 /dataSources/
 /dataSources.local.xml
 /vcs.xml
+/pyLspTools.xml
+/misc.xml
+/webResources.xml
+/MypyPlugin.xml
+/dataSources.xml
+/db-forest-config.xml
+/sqldialects.xml
+/codeStyles
