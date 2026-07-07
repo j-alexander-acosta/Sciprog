@@ -1,4 +1,4 @@
-#  Copyright (c) $today.year.Programación Científica DISC Antofagasta, Chile
+#  Copyright (c) 2026. Programacion Cientifica, DISC, Antofagasta, Chile.
 
 import logging
 
